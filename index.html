@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHubクイズ！</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f6f8fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .quiz-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+        h1 { color: #24292f; }
+        .question { font-size: 1.2rem; margin-bottom: 1.5rem; }
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        button {
+            padding: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            background-color: #f6f8fa;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #ebf0f4; }
+        .result { margin-top: 1.5rem; font-weight: bold; font-size: 1.1rem; }
+        .next-btn {
+            margin-top: 1rem;
+            background-color: #2da44e;
+            color: white;
+            border: none;
+            display: none;
+        }
+        .next-btn:hover { background-color: #2c974b; }
+    </style>
+</head>
+<body>
+
+<div class="quiz-container">
+    <h1>GitHubクイズ</h1>
+    <div id="quiz">
+        <div class="question" id="question">問題を読み込み中...</div>
+        <div class="options" id="options"></div>
+        <div class="result" id="result"></div>
+        <button class="next-btn" id="next-btn" onclick="nextQuestion()">次の問題へ</button>
+    </div>
+</div>
+
+<script>
+    const quizData = [
+        {
+            question: "GitHubでコードを保存する場所を何と呼ぶ？",
+            options: ["フォルダ", "リポジトリ", "ボックス", "ライブラリ"],
+            correct: 1
+        },
+        {
+            question: "GitHub Pagesの主な用途は？",
+            options: ["メール送信", "動画編集", "Webサイトの公開", "ゲーム実況"],
+            correct: 2
+        },
+        {
+            question: "変更を保存して記録することを何と言う？",
+            options: ["コミット", "セーブ", "チェック", "デプロイ"],
+            correct: 0
+        }
+    ];
+
+    let currentQuestion = 0;
+    let score = 0;
+
+    const questionEl = document.getElementById('question');
+    const optionsEl = document.getElementById('options');
+    const resultEl = document.getElementById('result');
+    const nextBtn = document.getElementById('next-btn');
+
+    function loadQuiz() {
+        resetState();
+        const currentQuizData = quizData[currentQuestion];
+        questionEl.innerText = currentQuizData.question;
+
+        currentQuizData.options.forEach((option, index) => {
+            const button = document.createElement('button');
+            button.innerText = option;
+            button.onclick = () => selectOption(index);
+            optionsEl.appendChild(button);
+        });
+    }
+
+    function resetState() {
+        optionsEl.innerHTML = '';
+        resultEl.innerText = '';
+        nextBtn.style.display = 'none';
+    }
+
+    function selectOption(index) {
+        const currentQuizData = quizData[currentQuestion];
+        const buttons = optionsEl.getElementsByTagName('button');
+        
+        for (let btn of buttons) {
+            btn.disabled = true;
+        }
+
+        if (index === currentQuizData.correct) {
+            resultEl.innerText = "正解！🎉";
+            resultEl.style.color = "#2da44e";
+            score++;
+        } else {
+            resultEl.innerText = "残念！正解は「" + currentQuizData.options[currentQuizData.correct] + "」でした。";
+            resultEl.style.color = "#cf222e";
+        }
+        nextBtn.style.display = 'block';
+    }
+
+    function nextQuestion() {
+        currentQuestion++;
+        if (currentQuestion < quizData.length) {
+            loadQuiz();
+        } else {
+            showFinalResult();
+        }
+    }
+
+    function showFinalResult() {
+        questionEl.innerText = "クイズ終了！";
+        optionsEl.innerHTML = `スコア: ${score} / ${quizData.length}`;
+        resultEl.innerText = "お疲れ様でした！";
+        nextBtn.innerText = "もう一度挑戦";
+        nextBtn.onclick = () => location.reload();
+        nextBtn.style.display = 'block';
+    }
+
+    loadQuiz();
+</script>
+
+</body>
+</html>
