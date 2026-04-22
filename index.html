@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秘密のクイズポータル</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f6f8fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { background-color: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 600px; width: 100%; text-align: center; }
+        h1 { color: #24292f; margin-bottom: 1rem; font-size: 1.5rem; }
+        input[type="password"] { padding: 12px; width: 100%; margin-bottom: 15px; border: 1px solid #d0d7de; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        .btn { padding: 12px 24px; font-size: 1rem; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 10px; transition: 0.2s; }
+        .primary-btn { background-color: #2da44e; color: white; }
+        .primary-btn:hover { background-color: #2c974b; }
+        .secondary-btn { background-color: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
+        .secondary-btn:hover { background-color: #ebf0f4; }
+        
+        .menu-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; text-align: left; }
+        .menu-item { padding: 15px; border: 1px solid #d0d7de; border-radius: 8px; cursor: pointer; background: #fff; display: flex; justify-content: space-between; align-items: center; }
+        .menu-item:hover { border-color: #0366d6; background: #f1f8ff; }
+        
+        .question { font-size: 1.2rem; margin-bottom: 1.5rem; text-align: left; line-height: 1.4; }
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        .option-btn { background-color: #f6f8fa; border: 1px solid #d0d7de; text-align: left; padding: 12px; border-radius: 6px; cursor: pointer; }
+        .option-btn:hover:not(:disabled) { background-color: #ebf0f4; }
+        .option-btn.correct { background-color: #dafbe1; border-color: #2da44e; }
+        .option-btn.wrong { background-color: #ffebe9; border-color: #cf222e; }
+        
+        .explanation-box { margin-top: 1.5rem; padding: 15px; background-color: #f1f8ff; border: 1px solid #c8e1ff; border-radius: 6px; text-align: left; display: none; }
+        #quiz-section, #login-section, #menu-section { display: none; }
+        #login-error { color: #cf222e; margin-top: 10px; font-size: 0.9rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="login-section">
+        <h1>秘密のクイズポータル</h1>
+        <p style="color: #57606a; margin-bottom: 1.5rem;">合言葉を入力してください。</p>
+        <input type="password" id="password-input" placeholder="合言葉">
+        <button class="btn primary-btn" onclick="handleLogin()">ログイン</button>
+        <div id="login-error"></div>
+    </div>
+
+    <div id="menu-section">
+        <h1>クイズを選択</h1>
+        <p style="color: #57606a;">挑戦したいクイズを選んでください。</p>
+        <div id="quiz-list" class="menu-list"></div>
+        <button class="btn secondary-btn" onclick="logout()" style="margin-top: 20px;">ログアウト</button>
+    </div>
+
+    <div id="quiz-section">
+        <div id="progress" style="font-size: 0.8rem; color: #57606a; margin-bottom: 10px;"></div>
+        <h2 id="current-quiz-title" style="font-size: 1rem; color: #0366d6;"></h2>
+        <div class="question" id="question"></div>
+        <div class="options" id="options"></div>
+        <div class="explanation-box" id="explanation-box">
+            <div style="font-weight: bold; color: #0366d6; margin-bottom: 5px;">💡 解説</div>
+            <div id="explanation-text"></div>
+        </div>
+        <button class="btn primary-btn" id="next-btn" onclick="nextQuestion()" style="display:none;">次へ進む</button>
+        <button class="btn secondary-btn" onclick="showMenu()" style="margin-top: 15px;">メニューに戻る</button>
+    </div>
+</div>
+
+<script>
+    let quizData = [];
+    let currentQuestion = 0;
+    let score = 0;
+    let userPassword = "";
+    const STORAGE_KEY = 'quiz_portal_pass';
+
+    // シャッフル用関数 (Fisher-Yates)
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    window.onload = function() {
+        const savedPass = sessionStorage.getItem(STORAGE_KEY);
+        if (savedPass) {
+            userPassword = savedPass;
+            showMenu();
+        } else {
+            document.getElementById('login-section').style.display = 'block';
+        }
+    };
+
+    function handleLogin() {
+        const pass = document.getElementById('password-input').value.trim();
+        if (!pass) {
+            document.getElementById('login-error').innerText = "合言葉を入力してください。";
+            return;
+        }
+        userPassword = pass;
+        showMenu();
+    }
+
+    async function showMenu() {
+        const menuSection = document.getElementById('menu-section');
+        const loginSection = document.getElementById('login-section');
+        const quizSection = document.getElementById('quiz-section');
+        const listContainer = document.getElementById('quiz-list');
+        
+        loginSection.style.display = 'none';
+        quizSection.style.display = 'none';
+        menuSection.style.display = 'block';
+        listContainer.innerHTML = "読み込み中...";
+
+        try {
+            const response = await fetch('./list.txt');
+            if (!response.ok) throw new Error('クイズ一覧(list.txt)が見つかりません。');
+            const text = await response.text();
+            
+            const lines = text.split('\n').filter(line => line.trim() !== "");
+            listContainer.innerHTML = "";
+
+            lines.forEach(line => {
+                const parts = line.split(',');
+                const filename = parts[0].trim();
+                const title = parts[1] ? parts[1].trim() : filename;
+                const item = document.createElement('div');
+                item.className = 'menu-item';
+                item.innerHTML = `<span>${title}</span> <span style="color: #0366d6;">→</span>`;
+                item.onclick = () => startQuiz(filename, title);
+                listContainer.appendChild(item);
+            });
+
+            sessionStorage.setItem(STORAGE_KEY, userPassword);
+
+        } catch (e) {
+            document.getElementById('login-section').style.display = 'block';
+            menuSection.style.display = 'none';
+            document.getElementById('login-error').innerText = "エラー: " + e.message;
+        }
+    }
+
+    async function startQuiz(filename, title) {
+        try {
+            const response = await fetch('./' + filename);
+            if (!response.ok) throw new Error('クイズファイルが見つかりません。');
+            const encryptedBase64 = await response.text();
+
+            const encryptedData = CryptoJS.enc.Base64.parse(encryptedBase64.trim());
+            const iv = CryptoJS.lib.WordArray.create(encryptedData.words.slice(0, 4));
+            const ciphertext = CryptoJS.lib.WordArray.create(encryptedData.words.slice(4));
+            const key = CryptoJS.SHA256(userPassword);
+
+            const decrypted = CryptoJS.AES.decrypt({ ciphertext: ciphertext }, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
+            const jsonText = decrypted.toString(CryptoJS.enc.Utf8);
+            if (!jsonText) throw new Error('合言葉が違うか、ファイルが対応していません。');
+
+            const rawData = JSON.parse(jsonText);
+            
+            // 【新機能】問題のシャッフル
+            quizData = shuffleArray([...rawData]);
+            
+            currentQuestion = 0;
+            score = 0;
+
+            document.getElementById('menu-section').style.display = 'none';
+            document.getElementById('quiz-section').style.display = 'block';
+            document.getElementById('current-quiz-title').innerText = title;
+            loadQuiz();
+
+        } catch (e) {
+            alert("エラー: " + e.message);
+            showMenu();
+        }
+    }
+
+    function loadQuiz() {
+        const currentQuizData = quizData[currentQuestion];
+        document.getElementById('progress').innerText = `問題 ${currentQuestion + 1} / ${quizData.length}`;
+        document.getElementById('question').innerText = currentQuizData.question;
+        document.getElementById('options').innerHTML = '';
+        document.getElementById('explanation-box').style.display = 'none';
+        document.getElementById('next-btn').style.display = 'none';
+
+        // 【新機能】選択肢のシャッフル
+        // 元の正解のテキストを覚えておく
+        const correctText = currentQuizData.options[currentQuizData.correct];
+        const shuffledOptions = shuffleArray([...currentQuizData.options]);
+        
+        shuffledOptions.forEach((optionText) => {
+            const btn = document.createElement('button');
+            btn.innerText = optionText;
+            btn.className = 'option-btn';
+            btn.onclick = () => selectOption(optionText, correctText);
+            document.getElementById('options').appendChild(btn);
+        });
+    }
+
+    function selectOption(selectedText, correctText) {
+        const buttons = document.querySelectorAll('.option-btn');
+        
+        buttons.forEach((btn) => {
+            btn.disabled = true;
+            if (btn.innerText === correctText) btn.classList.add('correct');
+            else if (btn.innerText === selectedText) btn.classList.add('wrong');
+        });
+
+        if (selectedText === correctText) score++;
+
+        const currentQuizData = quizData[currentQuestion];
+        if (currentQuizData.explanation) {
+            document.getElementById('explanation-text').innerText = currentQuizData.explanation;
+            document.getElementById('explanation-box').style.display = 'block';
+        }
+        document.getElementById('next-btn').style.display = 'block';
+    }
+
+    function nextQuestion() {
+        currentQuestion++;
+        if (currentQuestion < quizData.length) loadQuiz();
+        else showFinalResult();
+    }
+
+    function showFinalResult() {
+        document.getElementById('question').innerText = "結果発表";
+        document.getElementById('options').innerHTML = `<p style="font-size: 2rem;">${score} / ${quizData.length}</p>`;
+        document.getElementById('explanation-box').style.display = 'none';
+        const nextBtn = document.getElementById('next-btn');
+        nextBtn.innerText = "最初から挑戦（問題を再シャッフル）";
+        nextBtn.onclick = () => {
+            shuffleArray(quizData); // 再挑戦時もシャッフル
+            currentQuestion = 0;
+            score = 0;
+            loadQuiz();
+        };
+    }
+
+    function logout() {
+        sessionStorage.removeItem(STORAGE_KEY);
+        location.reload();
+    }
+</script>
+
+</body>
+</html>

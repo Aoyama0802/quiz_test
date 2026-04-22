@@ -1,0 +1,2 @@
+quiz_press1.txt, プレスリリースについて（正しい）
+quiz_press2.txt, プレスリリースについてテスト
