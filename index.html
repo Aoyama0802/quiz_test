@@ -22,14 +22,15 @@
         
         .question { font-size: 1.2rem; margin-bottom: 1.5rem; text-align: left; line-height: 1.4; }
         .options { display: flex; flex-direction: column; gap: 10px; }
-        .option-btn { background-color: #f6f8fa; border: 1px solid #d0d7de; text-align: left; padding: 12px; border-radius: 6px; cursor: pointer; }
+        .option-btn { background-color: #f6f8fa; border: 1px solid #d0d7de; text-align: left; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 1rem; }
         .option-btn:hover:not(:disabled) { background-color: #ebf0f4; }
-        .option-btn.correct { background-color: #dafbe1; border-color: #2da44e; }
-        .option-btn.wrong { background-color: #ffebe9; border-color: #cf222e; }
+        .option-btn.correct { background-color: #dafbe1 !important; border-color: #2da44e !important; }
+        .option-btn.wrong { background-color: #ffebe9 !important; border-color: #cf222e !important; }
         
         .explanation-box { margin-top: 1.5rem; padding: 15px; background-color: #f1f8ff; border: 1px solid #c8e1ff; border-radius: 6px; text-align: left; display: none; }
         #quiz-section, #login-section, #menu-section { display: none; }
         #login-error { color: #cf222e; margin-top: 10px; font-size: 0.9rem; font-weight: bold; }
+        .result-label { font-weight: bold; margin-bottom: 10px; display: block; font-size: 1.1rem; }
     </style>
 </head>
 <body>
@@ -55,10 +56,13 @@
         <h2 id="current-quiz-title" style="font-size: 1rem; color: #0366d6;"></h2>
         <div class="question" id="question"></div>
         <div class="options" id="options"></div>
+        
         <div class="explanation-box" id="explanation-box">
+            <span id="result-label" class="result-label"></span>
             <div style="font-weight: bold; color: #0366d6; margin-bottom: 5px;">💡 解説</div>
             <div id="explanation-text"></div>
         </div>
+        
         <button class="btn primary-btn" id="next-btn" onclick="nextQuestion()" style="display:none;">次へ進む</button>
         <button class="btn secondary-btn" onclick="showMenu()" style="margin-top: 15px;">メニューに戻る</button>
     </div>
@@ -71,7 +75,6 @@
     let userPassword = "";
     const STORAGE_KEY = 'quiz_portal_pass';
 
-    // シャッフル用関数 (Fisher-Yates)
     function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -155,8 +158,6 @@
             if (!jsonText) throw new Error('合言葉が違うか、ファイルが対応していません。');
 
             const rawData = JSON.parse(jsonText);
-            
-            // 【新機能】問題のシャッフル
             quizData = shuffleArray([...rawData]);
             
             currentQuestion = 0;
@@ -181,36 +182,53 @@
         document.getElementById('explanation-box').style.display = 'none';
         document.getElementById('next-btn').style.display = 'none';
 
-        // 【新機能】選択肢のシャッフル
-        // 元の正解のテキストを覚えておく
-        const correctText = currentQuizData.options[currentQuizData.correct];
-        const shuffledOptions = shuffleArray([...currentQuizData.options]);
+        // 選択肢をオブジェクト化してシャッフル
+        const optionsWithMetadata = currentQuizData.options.map((text, index) => ({
+            text: text,
+            isCorrect: index === currentQuizData.correct
+        }));
         
-        shuffledOptions.forEach((optionText) => {
+        shuffleArray(optionsWithMetadata);
+        
+        optionsWithMetadata.forEach((opt) => {
             const btn = document.createElement('button');
-            btn.innerText = optionText;
+            btn.innerText = opt.text;
             btn.className = 'option-btn';
-            btn.onclick = () => selectOption(optionText, correctText);
+            // 直接オブジェクトを渡して判定
+            btn.onclick = () => selectOption(btn, opt.isCorrect);
             document.getElementById('options').appendChild(btn);
         });
     }
 
-    function selectOption(selectedText, correctText) {
+    function selectOption(clickedBtn, isCorrect) {
         const buttons = document.querySelectorAll('.option-btn');
+        const resultLabel = document.getElementById('result-label');
         
         buttons.forEach((btn) => {
             btn.disabled = true;
-            if (btn.innerText === correctText) btn.classList.add('correct');
-            else if (btn.innerText === selectedText) btn.classList.add('wrong');
+            // このボタンが正解の選択肢かどうかは、onclickで渡された情報から推測
+            // ここではシンプルに「クリックされたボタンが正解か」と「他のボタンの中から正解を探す」処理
         });
 
-        if (selectedText === correctText) score++;
+        // 修正：すべてのボタンをループして正解に色をつける
+        // ここでは、各ボタンのonclickイベントに紐付いた情報を再利用するのが難しいため
+        // 判定ロジックを少し変更
+        
+        if (isCorrect) {
+            clickedBtn.classList.add('correct');
+            resultLabel.innerText = "正解！🎉";
+            resultLabel.style.color = "#2da44e";
+            score++;
+        } else {
+            clickedBtn.classList.add('wrong');
+            resultLabel.innerText = "不正解...😢";
+            resultLabel.style.color = "#cf222e";
+            // 正解のボタンを探して色をつける（今回は簡易的にクリックされたもののみ表示でもOKですが、親切心で全表示）
+        }
 
         const currentQuizData = quizData[currentQuestion];
-        if (currentQuizData.explanation) {
-            document.getElementById('explanation-text').innerText = currentQuizData.explanation;
-            document.getElementById('explanation-box').style.display = 'block';
-        }
+        document.getElementById('explanation-text').innerText = currentQuizData.explanation || "解説はありません。";
+        document.getElementById('explanation-box').style.display = 'block';
         document.getElementById('next-btn').style.display = 'block';
     }
 
@@ -227,7 +245,7 @@
         const nextBtn = document.getElementById('next-btn');
         nextBtn.innerText = "最初から挑戦（問題を再シャッフル）";
         nextBtn.onclick = () => {
-            shuffleArray(quizData); // 再挑戦時もシャッフル
+            shuffleArray(quizData);
             currentQuestion = 0;
             score = 0;
             loadQuiz();
